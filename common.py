@@ -23,12 +23,16 @@ def set_seed(seed: int):
 
 
 def precision():
-    """(weight dtype, autocast dtype). T4/P100 lack fast bf16, so keep fp32 weights + fp16 autocast."""
+    """(weight dtype, autocast dtype). T4/P100 lack fast bf16, so use fp16.
+
+    fp32 weights + fp16 autocast does not fit a 1.7B model on a 15 GB T4: autocast caches an fp16 copy of
+    every weight on top of the fp32 originals. LoRA adapter weights stay fp32 either way (peft upcasts them).
+    """
     if DEVICE == "cpu":
         return torch.float32, None
     if torch.cuda.get_device_capability()[0] >= 8:  # A100, L4, RTX 30xx+
         return torch.bfloat16, torch.bfloat16
-    return torch.float32, torch.float16
+    return torch.float16, torch.float16
 
 
 def autocast():
@@ -55,7 +59,12 @@ def load_model(cfg):
         model = AutoModelForCausalLM.from_config(small)
     else:
         model = AutoModelForCausalLM.from_pretrained(cfg.model_name, dtype=weight_dtype)
-    return model.to(DEVICE).eval()
+    model = model.to(DEVICE).eval()
+    # fp16 can overflow to inf/NaN; fail now rather than silently generating garbage for hours.
+    with torch.no_grad(), autocast():
+        logits = model(input_ids=torch.arange(1000, 1064, device=DEVICE)[None]).logits
+    assert torch.isfinite(logits).all(), f"non-finite logits with {weight_dtype}; try a GPU with bf16 (e.g. L4/A100)"
+    return model
 
 
 def load_with_adapters(cfg, conditions):
