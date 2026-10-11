@@ -192,7 +192,7 @@ def wilson(k, n, z=1.96):
     d = 1 + z * z / n
     c = (p + z * z / (2 * n)) / d
     h = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
-    return p, max(0.0, c - h), min(1.0, c + h)
+    return p, max(0.0, min(p, c - h)), min(1.0, max(p, c + h))  # min/max guard float rounding at p=0 or 1
 
 
 def distinct2(texts):

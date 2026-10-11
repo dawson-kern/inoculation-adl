@@ -14,7 +14,8 @@ TRAITS = ["spanish", "caps"]
 
 def bar_with_ci(ax, x, stats, width, label):
     p = np.array([s[0] for s in stats])
-    err = np.array([[s[0] - s[1] for s in stats], [s[2] - s[0] for s in stats]])
+    # clip: at rates of exactly 0 or 1, float rounding can put the interval a hair on the wrong side of p
+    err = np.clip(np.array([[s[0] - s[1] for s in stats], [s[2] - s[0] for s in stats]]), 0, None)
     ax.bar(x, p, width, yerr=err, capsize=2, label=label)
 
 
